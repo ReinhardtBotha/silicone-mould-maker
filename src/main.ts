@@ -10,8 +10,10 @@ type NumKey = { [K in keyof MouldParams]: MouldParams[K] extends number ? K : ne
 type BoolKey = { [K in keyof MouldParams]: MouldParams[K] extends boolean ? K : never }[keyof MouldParams];
 interface NumDef { key: NumKey; label: string; min: number; max: number; step: number; unit?: string; tip: string }
 interface BoolDef { key: BoolKey; label: string; tip: string }
+interface SelectDef { key: 'joints'; label: string; tip: string; options: [string, string][]; select: true }
+type Def = NumDef | BoolDef | SelectDef | 'split';
 
-const basic: (NumDef | BoolDef | 'split')[] = [
+const basic: Def[] = [
   { key: 'siliconeThickness', label: 'Silicone thickness', min: 2, max: 20, step: 0.5, unit: 'mm', tip: 'Gap between the master and the shell, filled with silicone.' },
   { key: 'wallThickness', label: 'Shell wall', min: 1.2, max: 6, step: 0.2, unit: 'mm', tip: 'Thickness of the printed shell.' },
   { key: 'smoothing', label: 'Shape smoothing', min: 0, max: 25, step: 1, unit: 'mm', tip: 'Bridges gaps and concave detail so the shell is simpler. 0 follows the model as closely as possible (least silicone).' },
@@ -19,12 +21,19 @@ const basic: (NumDef | BoolDef | 'split')[] = [
   { key: 'splitOffset', label: 'Split offset', min: -100, max: 100, step: 0.5, unit: 'mm', tip: 'Moves the split plane away from the model centre.' },
   { key: 'resolution', label: 'Quality', min: 80, max: 260, step: 10, tip: 'Grid cells along the longest side. Higher = smoother but slower and more memory.' },
 ];
-const advanced: (NumDef | BoolDef)[] = [
-  { key: 'flangeWidth', label: 'Flange width', min: 4, max: 25, step: 0.5, unit: 'mm', tip: 'How far the bolting flange sticks out from the shell.' },
-  { key: 'flangeThickness', label: 'Flange thickness', min: 2, max: 10, step: 0.5, unit: 'mm', tip: 'Thickness of each flange half.' },
-  { key: 'bolts', label: 'Bolt holes', tip: 'Add bolt holes through the flanges to clamp and align the halves.' },
+const advanced: Def[] = [
+  {
+    key: 'joints', label: 'Halves joined by', select: true,
+    tip: 'Alignment pins: sockets in both halves plus loose pins; hold the halves together with external clamps. Bolts: holes straight through both flanges.',
+    options: [['pins', 'Alignment pins + clamps'], ['bolts', 'Bolts'], ['none', 'Nothing (clamps only)']],
+  },
+  { key: 'pinDiameter', label: 'Pin Ø', min: 1.5, max: 10, step: 0.1, unit: 'mm', tip: 'Diameter of the alignment pins. Use the printed pins, or metal dowels / filament offcuts of this diameter.' },
+  { key: 'pinDepth', label: 'Socket depth', min: 1, max: 10, step: 0.5, unit: 'mm', tip: 'Depth of the pin socket in each half (capped at flange thickness − 0.8 mm).' },
+  { key: 'pinClearance', label: 'Pin clearance', min: 0, max: 0.6, step: 0.05, unit: 'mm', tip: 'Extra radius on the sockets so the pins slide in. Increase if your printer prints holes tight.' },
   { key: 'boltDiameter', label: 'Bolt hole Ø', min: 2, max: 8, step: 0.1, unit: 'mm', tip: '3.4 mm suits M3 bolts.' },
-  { key: 'boltSpacing', label: 'Bolt spacing', min: 10, max: 120, step: 1, unit: 'mm', tip: 'Minimum distance between bolts.' },
+  { key: 'jointSpacing', label: 'Pin / bolt spacing', min: 10, max: 120, step: 1, unit: 'mm', tip: 'Minimum distance between pins or bolts.' },
+  { key: 'flangeWidth', label: 'Flange width', min: 4, max: 25, step: 0.5, unit: 'mm', tip: 'How far the flange sticks out from the shell (clamping / joint surface).' },
+  { key: 'flangeThickness', label: 'Flange thickness', min: 2, max: 10, step: 0.5, unit: 'mm', tip: 'Thickness of each flange half.' },
   { key: 'pourDiameter', label: 'Pour hole Ø', min: 4, max: 30, step: 0.5, unit: 'mm', tip: 'Placed automatically at the highest point of the cavity.' },
   { key: 'funnelHeight', label: 'Funnel height', min: 0, max: 40, step: 1, unit: 'mm', tip: 'Flared funnel above the pour hole (0 = just a hole).' },
   { key: 'vents', label: 'Auto vents', tip: 'Drill vent holes above every pocket where air would be trapped.' },
@@ -39,9 +48,11 @@ const params: MouldParams = { ...defaultParams };
 try {
   Object.assign(params, JSON.parse(localStorage.getItem('mould-params') ?? '{}'));
 } catch { /* ignore */ }
+for (const k of Object.keys(params)) if (!(k in defaultParams)) delete (params as unknown as Record<string, unknown>)[k];
+if (!['pins', 'bolts', 'none'].includes(params.joints)) params.joints = defaultParams.joints;
 const saveParams = () => { try { localStorage.setItem('mould-params', JSON.stringify(params)); } catch { /* ignore */ } };
 
-function renderParams(host: HTMLElement, defs: (NumDef | BoolDef | 'split')[]) {
+function renderParams(host: HTMLElement, defs: Def[]) {
   for (const d of defs) {
     const row = document.createElement('label');
     row.className = 'param';
@@ -51,6 +62,11 @@ function renderParams(host: HTMLElement, defs: (NumDef | BoolDef | 'split')[]) {
       const sel = row.querySelector('select')!;
       sel.value = params.splitAxis;
       sel.onchange = () => { params.splitAxis = sel.value as 'x' | 'y'; saveParams(); updateSplitPreview(); };
+    } else if ('select' in d) {
+      row.innerHTML = `<span title="${d.tip}">${d.label}</span><select>${d.options.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select>`;
+      const sel = row.querySelector('select')!;
+      sel.value = params[d.key];
+      sel.onchange = () => { (params[d.key] as string) = sel.value; saveParams(); updateJointRows(); };
     } else if ('min' in d) {
       row.innerHTML = `<span title="${d.tip}">${d.label}</span><input type="number" min="${d.min}" max="${d.max}" step="${d.step}" value="${params[d.key]}" /><em>${d.unit ?? ''}</em>`;
       const inp = row.querySelector('input')!;
@@ -63,11 +79,22 @@ function renderParams(host: HTMLElement, defs: (NumDef | BoolDef | 'split')[]) {
       const inp = row.querySelector('input')!;
       inp.onchange = () => { params[d.key] = inp.checked; saveParams(); };
     }
+    if (d !== 'split') row.dataset.key = d.key;
     host.appendChild(row);
   }
 }
+/** Only show the pin or bolt settings that apply to the selected joint type. */
+function updateJointRows() {
+  const show: Record<string, boolean> = {
+    pinDiameter: params.joints === 'pins', pinDepth: params.joints === 'pins', pinClearance: params.joints === 'pins',
+    boltDiameter: params.joints === 'bolts', jointSpacing: params.joints !== 'none',
+  };
+  for (const [k, v] of Object.entries(show))
+    document.querySelector<HTMLElement>(`[data-key="${k}"]`)?.classList.toggle('hidden', !v);
+}
 renderParams(document.getElementById('params')!, basic);
 renderParams(document.getElementById('advParams')!, advanced);
+updateJointRows();
 
 // ---------------------------------------------------------------- viewer
 THREE.Object3D.DEFAULT_UP.set(0, 0, 1);
@@ -311,7 +338,7 @@ function showResult(res: MouldResult) {
       <div><b>${s.modelVolumeMl.toFixed(0)} ml</b><span>resin per cast</span></div>
       <div><b>${s.shellVolumeCm3.toFixed(0)} cm³</b><span>plastic to print</span></div>
     </div>
-    <small>${res.bolts.length} bolt holes · voxel ${s.voxelSize.toFixed(2)} mm · ${(s.millis / 1000).toFixed(1)} s</small>`;
+    <small>${jointText(res)} · voxel ${s.voxelSize.toFixed(2)} mm · ${(s.millis / 1000).toFixed(1)} s</small>`;
   const vented = res.traps.filter((t) => t.vented).length;
   const blocked = res.traps.filter((t) => !t.vented);
   let html = `<p class="legend"><i style="background:#ffd34d"></i> pour funnel`;
@@ -322,8 +349,16 @@ function showResult(res: MouldResult) {
       .map((r) => `<li>${r}</li>`).join('')}</ul>Brush a thin coat of silicone onto those areas first, or rotate the model.</div>`;
   }
   document.getElementById('trapList')!.innerHTML = html;
+  document.querySelector<HTMLElement>('[data-dl="pins"]')!.classList.toggle('hidden', !res.pins);
   document.getElementById('results')!.classList.remove('hidden');
   applyVisibility();
+}
+
+function jointText(res: MouldResult) {
+  const n = res.joints.length;
+  if (res.jointType === 'none') return 'no pins or bolts';
+  if (res.jointType === 'pins') return `${n} alignment pin${n === 1 ? '' : 's'}`;
+  return `${n} bolt hole${n === 1 ? '' : 's'}`;
 }
 
 const explode = document.getElementById('explode') as HTMLInputElement;
@@ -384,6 +419,10 @@ document.querySelectorAll<HTMLButtonElement>('[data-dl]').forEach((b) => {
       return;
     }
     if (!result) return;
+    if (which === 'pins') {
+      if (result.pins) download(writeSTL(result.pins.positions, result.pins.index), `${safe}_mould_pins.stl`);
+      return;
+    }
     const k = which as 'halfA' | 'halfB' | 'base';
     download(writeSTL(...(Object.values(orientForPrint(result[k], k, result)) as [Float32Array, Uint32Array])), `${safe}_mould_${k}.stl`);
   };

@@ -14,9 +14,15 @@ export interface MouldParams {
   splitOffset: number;
   flangeWidth: number;
   flangeThickness: number;
-  bolts: boolean;
+  /** How the two halves are aligned / fastened. Pins = blind sockets in both halves + loose pins, clamp externally. */
+  joints: 'pins' | 'bolts' | 'none';
   boltDiameter: number;
-  boltSpacing: number;
+  pinDiameter: number;
+  /** Depth of each pin socket (per half), limited to flange thickness - 0.8 mm. */
+  pinDepth: number;
+  /** Extra radius added to the sockets so pins slide in. */
+  pinClearance: number;
+  jointSpacing: number;
   pourDiameter: number;
   funnelHeight: number;
   vents: boolean;
@@ -38,9 +44,12 @@ export const defaultParams: MouldParams = {
   splitOffset: 0,
   flangeWidth: 10,
   flangeThickness: 4,
-  bolts: true,
+  joints: 'pins',
   boltDiameter: 3.4,
-  boltSpacing: 35,
+  pinDiameter: 4,
+  pinDepth: 3,
+  pinClearance: 0.15,
+  jointSpacing: 35,
   pourDiameter: 12,
   funnelHeight: 12,
   vents: true,
@@ -61,7 +70,11 @@ export interface MouldResult {
   base: Mesh;
   pour: Point3;
   traps: Trap[];
-  bolts: Point3[];
+  /** Bolt hole or pin socket centres on the split plane. */
+  joints: Point3[];
+  jointType: MouldParams['joints'];
+  /** Loose alignment pins to print (only for joints = 'pins'). */
+  pins: Mesh | null;
   splitAxis: 'x' | 'y';
   splitPos: number;
   z0: number;
@@ -251,18 +264,23 @@ export function generateMould(tris: Float32Array, P: MouldParams, progress: Prog
     traps.push(t);
   }
   const vents = traps.filter((t) => t.vented) as (Trap & { zExit: number })[];
+  const rv0 = P.ventDiameter / 2;
 
-  // ---- bolt positions along the flange -----------------------------------------------------------
-  progress('Placing bolts', 0.45);
+  // ---- bolt / pin positions along the flange ------------------------------------------------------
+  progress(P.joints === 'pins' ? 'Placing alignment pins' : 'Placing bolts', 0.45);
   const bolts: Point3[] = [];
+  const usePins = P.joints === 'pins';
   const rb = P.boltDiameter / 2;
+  const pinDepth = Math.max(0.5, Math.min(P.pinDepth, ft - 0.8));
+  const rs = P.pinDiameter / 2 + P.pinClearance; // socket radius
+  const rj = usePins ? rs : rb; // hole radius used for placement
   const sample = (x: number, y: number, z: number) => {
     const i = Math.round((x - ox) / h), j = Math.round((y - oy) / h), k = Math.round((z - oz) / h);
     if (i < 0 || j < 0 || k < 0 || i >= nx || j >= ny || k >= nz) return 1e9;
     return phi[i + j * sy + k * sz];
   };
   const ridgeH = P.baseRidge ? 3 : 0;
-  if (P.bolts && fw >= P.boltDiameter + 2) {
+  if (P.joints !== 'none' && fw >= 2 * rj + 2) {
     const target = w + fw / 2;
     const cands: { t: number; z: number }[] = [];
     const si = Math.round(((sAxis === 0 ? 0 : 0) + sp - (sAxis === 0 ? ox : oy)) / h);
@@ -272,20 +290,22 @@ export function generateMould(tris: Float32Array, P: MouldParams, progress: Prog
         const id = sAxis === 0 ? si + tI * sy + k * sz : tI + si * sy + k * sz;
         if (Math.abs(phi[id] - target) > 0.75 * h) continue;
         const t = (sAxis === 0 ? oy : ox) + tI * h, z = oz + k * h;
-        if (z < z0 + ridgeH + rb + 2.5) continue;
+        if (z < z0 + ridgeH + rj + 2.5) continue;
         cands.push({ t, z });
       }
     cands.sort((a, b) => a.z - b.z);
     const headR = rb * 1.9;
-    const spacing = Math.max(P.boltSpacing, P.boltDiameter * 3);
+    const spacing = Math.max(P.jointSpacing, rj * 6);
     const pt = sAxis === 0 ? pour.y : pour.x;
     const ps = sAxis === 0 ? pour.x : pour.y;
     for (const c of cands) {
       if (bolts.some((b) => Math.hypot((sAxis === 0 ? b.y : b.x) - c.t, b.z - c.z) < spacing)) continue;
-      if (Math.abs(ps - sp) < P.pourDiameter / 2 + w * 2 + rb && Math.abs(c.t - pt) < P.pourDiameter / 2 + w * 2 + rb + 2 && c.z > pour.z - 3) continue;
-      // Make sure there is room for a bolt head / nut on both sides (no shell wall in the way).
+      if (Math.abs(ps - sp) < P.pourDiameter / 2 + w * 2 + rj && Math.abs(c.t - pt) < P.pourDiameter / 2 + w * 2 + rj + 2 && c.z > pour.z - 3) continue;
+      // Keep pin sockets clear of vent holes running through the flange.
+      if (vents.some((v) => Math.hypot(v.x - (sAxis === 0 ? sp : c.t), v.y - (sAxis === 0 ? c.t : sp)) < rj + rv0 + 1 && c.z > v.z - rj - 1 && c.z < v.zExit + rj + 1)) continue;
+      // Bolts need room for a head / nut on both sides (no shell wall in the way).
       let ok = true;
-      for (const side of [-1, 1])
+      if (!usePins) for (const side of [-1, 1])
         for (const d of [ft + 0.6, ft + 4])
           for (const [dt, dz] of [[0, 0], [headR, 0], [-headR, 0], [0, headR], [0, -headR]]) {
             const s = sp + side * d, t = c.t + dt, z = c.z + dz;
@@ -330,11 +350,14 @@ export function generateMould(tris: Float32Array, P: MouldParams, progress: Prog
             if (r > rv + 2 * h) continue;
             f = Math.max(f, -Math.max(r - rv, v.z - h - z, z - (v.zExit + h)));
           }
-          // bolts
+          // bolt holes straight through both flanges, or blind pin sockets with a small lead-in chamfer
           for (const b of bolts) {
             const r = Math.hypot(t - (sAxis === 0 ? b.y : b.x), z - b.z);
-            if (r > rb + 2 * h) continue;
-            f = Math.max(f, -Math.max(r - rb, Math.abs(ds) - ft - h));
+            if (r > rj + 1 + 2 * h) continue;
+            const ad = Math.abs(ds);
+            f = usePins
+              ? Math.max(f, -Math.max(r - rs - Math.max(0, 0.5 - ad), ad - pinDepth))
+              : Math.max(f, -Math.max(r - rb, ad - ft - h));
           }
           // keep one side of the split plane
           f = Math.max(f, side < 0 ? ds : -ds);
@@ -391,7 +414,10 @@ export function generateMould(tris: Float32Array, P: MouldParams, progress: Prog
   const bw = maxX - minX + 2 * g, bd = maxY - minY + 2 * g, bh = maxZ - minZ + g;
   progress('Done', 1);
   return {
-    halfA, halfB, base, pour, traps, bolts,
+    halfA, halfB, base, pour, traps,
+    joints: bolts,
+    jointType: P.joints,
+    pins: usePins && bolts.length ? makePins(bolts.length, P.pinDiameter, 2 * pinDepth - 0.4) : null,
     splitAxis: P.splitAxis, splitPos: sp, z0,
     stats: {
       voxelSize: h,
@@ -422,4 +448,39 @@ function blur3(f: Float32Array, nx: number, ny: number, nz: number, passes: numb
     run(ny, nx, ys());
     run(nz, nx * ny, zs());
   }
+}
+
+/** Row of chamfered cylindrical pins standing upright, ready to print. */
+function makePins(count: number, diameter: number, length: number): Mesh {
+  const r = diameter / 2, ch = Math.min(0.4, r * 0.3, length / 4), seg = 32;
+  // Profile (radius, z) from bottom to top including chamfers.
+  const prof: [number, number][] = [[r - ch, 0], [r, ch], [r, length - ch], [r - ch, length]];
+  const pos: number[] = [], idx: number[] = [];
+  const pitch = diameter + 3;
+  const cols = Math.ceil(Math.sqrt(count));
+  for (let n = 0; n < count; n++) {
+    const cx = (n % cols) * pitch, cy = Math.floor(n / cols) * pitch;
+    const base = pos.length / 3;
+    for (const [pr, pz] of prof)
+      for (let a = 0; a < seg; a++) {
+        const th = (a / seg) * Math.PI * 2;
+        pos.push(cx + pr * Math.cos(th), cy + pr * Math.sin(th), pz);
+      }
+    const bottomC = pos.length / 3; pos.push(cx, cy, 0);
+    const topC = pos.length / 3; pos.push(cx, cy, length);
+    for (let ring = 0; ring < prof.length - 1; ring++)
+      for (let a = 0; a < seg; a++) {
+        const a1 = (a + 1) % seg;
+        const p00 = base + ring * seg + a, p01 = base + ring * seg + a1;
+        const p10 = base + (ring + 1) * seg + a, p11 = base + (ring + 1) * seg + a1;
+        idx.push(p00, p01, p11, p00, p11, p10);
+      }
+    const last = base + (prof.length - 1) * seg;
+    for (let a = 0; a < seg; a++) {
+      const a1 = (a + 1) % seg;
+      idx.push(bottomC, base + a1, base + a);
+      idx.push(topC, last + a, last + a1);
+    }
+  }
+  return { positions: new Float32Array(pos), index: new Uint32Array(idx) };
 }

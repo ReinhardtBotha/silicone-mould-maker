@@ -25,11 +25,12 @@ console.log('teddy tris', teddy.length / 9);
 const res = generateMould(teddy, { ...defaultParams, resolution: Number(process.argv[2] ?? 140) }, (s, f) =>
   console.log(`  ${(f * 100).toFixed(0)}% ${s}`),
 );
-console.log(JSON.stringify({ stats: res.stats, pour: res.pour, traps: res.traps, bolts: res.bolts.length }, null, 1));
+console.log(JSON.stringify({ stats: res.stats, pour: res.pour, traps: res.traps, joints: res.joints.length, jointType: res.jointType }, null, 1));
 let ok = true;
 ok = checkClosed('halfA', res.halfA) && ok;
 ok = checkClosed('halfB', res.halfB) && ok;
 ok = checkClosed('base', res.base) && ok;
+if (res.pins) ok = checkClosed('pins', res.pins) && ok;
 mkdirSync(process.argv[3] ?? 'out', { recursive: true });
 const dir = process.argv[3] ?? 'out';
 for (const [n, m] of [['halfA', res.halfA], ['halfB', res.halfB], ['base', res.base]] as const)

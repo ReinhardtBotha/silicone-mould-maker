@@ -11,7 +11,7 @@ Everything runs locally in your browser. Nothing is uploaded.
 
 | Part | Description |
 | --- | --- |
-| **Shell half A / B** | An offset shell around the master, split along a vertical plane. Each half has a bolting flange with M3 bolt holes. The halves are exported lying on their flat split face, ready to print. |
+| **Shell half A / B** | An offset shell around the master, split along a vertical plane. Each half has a flange that is lined up with **alignment pins** (blind sockets in both halves plus printable loose pins, held shut with external clamps) or, optionally, M3 bolt holes. The halves are exported lying on their flat split face, ready to print. |
 | **Pour funnel** | Placed automatically at the highest point of the silicone cavity. |
 | **Air vents** | The app works out where air would be trapped as silicone fills the mould (local high points of the cavity) and drills a vent above each one. Pockets that sit under an overhang of the model can't be vented; they're shown in red with advice. |
 | **Base plate** | Seals the bottom of the shell. It has a pocket matching the master's footprint so you can glue the master in place, and a ridge that locates the shell. |
@@ -27,7 +27,8 @@ mould (where resin is poured in later), so orient the model with its flat bottom
   the shell is simpler and has fewer air traps. Set it to 0 to follow the model as closely as possible.
 - **Split plane / offset**: where the shell is cut into two halves.
 - **Quality**: the voxel grid resolution. Higher settings give smoother shells but take more time and memory.
-- **Advanced**: flange size, bolt hole size and spacing, pour hole and funnel, vents, and base plate.
+- **Halves joined by** (Advanced): alignment pins + clamps (default), bolts, or nothing. Pin diameter, socket depth and clearance are adjustable; the pins can be printed from the exported pins STL or replaced with metal dowels / filament offcuts of the same diameter.
+- **Advanced**: flange size, joint spacing, pour hole and funnel, vents, and base plate.
 
 ## How it works
 
@@ -35,7 +36,7 @@ mould (where resin is poured in later), so orient the model with its flat bottom
    inside/outside, so small holes in the mesh are tolerated.
 2. An exact Euclidean distance transform gives the distance from every voxel to the master.
    Optional morphological closing (dilate by *g + R*, erode by *R*) smooths the shape.
-3. The shell is the band `g ≤ distance ≤ g + wall`, combined with flanges, the funnel, vents, bolt
+3. The shell is the band `g ≤ distance ≤ g + wall`, combined with flanges, the funnel, vents, pin sockets / bolt
    holes and the split plane as implicit fields.
 4. A merge tree over the cavity, built from the top layer down, finds every local high point where
    air would collect, together with its depth. The deepest one gets the pour funnel and the rest get vents.
@@ -59,7 +60,7 @@ The build is static with relative paths, so `dist/` can be hosted anywhere (GitH
 
 1. Print both halves and the base plate (PLA/PETG, 3+ perimeters).
 2. Glue the master into the footprint pocket on the base plate.
-3. Bolt the halves together around it, seat them inside the base ridge and seal the seams (hot glue or plasticine).
+3. Close the halves around it with the alignment pins in their sockets, clamp the flanges shut (or bolt them), seat them inside the base ridge and seal the seams (hot glue or plasticine).
 4. Mix and degas the silicone. Pour slowly in a thin stream into the funnel until silicone appears at the vents.
 5. Once cured, open the shell and remove the master (cut the silicone along one side if needed).
    Put the silicone glove back into the shell for support while you cast.
