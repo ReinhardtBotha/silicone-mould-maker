@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Silicone Mould Maker</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <aside id="panel">
+      <header>
+        <h1>Silicone Mould Maker</h1>
+        <p class="sub">Turn an STL into a printable, shape-following mould shell for silicone casting.</p>
+      </header>
+
+      <section>
+        <h2>1 · Model</h2>
+        <label class="drop" id="drop">
+          <input type="file" id="file" accept=".stl" hidden />
+          <span id="dropText">Drop an STL here or <u>browse</u></span>
+        </label>
+        <button id="demo" class="link">or load the demo teddy bear</button>
+        <div id="modelInfo" class="info"></div>
+        <div class="row">
+          <label>Scale <input type="number" id="scale" value="1" step="0.1" min="0.01" /></label>
+          <button id="inch" title="Model was exported in inches">in → mm</button>
+        </div>
+        <div class="row rot">
+          <span>Rotate</span>
+          <button data-rot="x">X 90°</button>
+          <button data-rot="y">Y 90°</button>
+          <button data-rot="z">Z 90°</button>
+        </div>
+        <p class="hint">The model's lowest face sits on the base plate and becomes the opening of the silicone mould. Put the flat bottom down.</p>
+      </section>
+
+      <section>
+        <h2>2 · Mould</h2>
+        <div class="grid" id="params"></div>
+        <details>
+          <summary>Advanced</summary>
+          <div class="grid" id="advParams"></div>
+        </details>
+        <button id="generate" class="primary" disabled>Generate mould</button>
+        <div id="progress" class="progress hidden"><div></div><span></span></div>
+      </section>
+
+      <section id="results" class="hidden">
+        <h2>3 · Results</h2>
+        <div id="stats" class="info"></div>
+        <div id="trapList"></div>
+        <label class="slider">Explode <input type="range" id="explode" min="0" max="1" step="0.01" value="0.35" /></label>
+        <div class="row toggles">
+          <label><input type="checkbox" id="showModel" checked /> Model</label>
+          <label><input type="checkbox" id="showA" checked /> Half A</label>
+          <label><input type="checkbox" id="showB" checked /> Half B</label>
+          <label><input type="checkbox" id="showBase" checked /> Base</label>
+        </div>
+        <div class="downloads">
+          <button data-dl="halfA">Half A .stl</button>
+          <button data-dl="halfB">Half B .stl</button>
+          <button data-dl="base">Base plate .stl</button>
+          <button data-dl="master">Master (oriented) .stl</button>
+        </div>
+        <p class="hint">Halves are exported lying on their flat split face, ready to print.</p>
+      </section>
+
+      <details class="howto">
+        <summary>How to cast</summary>
+        <ol>
+          <li>Print both shell halves and the base plate (PLA/PETG, 3+ walls). Print the master too if you don't have it.</li>
+          <li>Glue the master into the matching footprint pocket in the base plate (hot glue or CA).</li>
+          <li>Bolt the halves together (M3 by default) around the master, seat them inside the ridge and seal the seams with hot glue or plasticine.</li>
+          <li>Spray mould release if your silicone needs it. Mix and degas the silicone, then pour slowly in a thin stream into the funnel until it reaches the vents and the funnel.</li>
+          <li>After curing, unbolt the shell, cut the silicone along one side if needed to release the master. Put the silicone back in the shell for support when casting resin through the bottom opening.</li>
+        </ol>
+      </details>
+    </aside>
+    <main id="view">
+      <div id="empty">Load an STL (or the demo) to start.</div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -1,0 +1,34 @@
+{
+  "name": "silicone-mould-maker",
+  "version": "1.0.0",
+  "description": "Web app that turns an STL into a 3D-printable, shape-following shell for silicone mould casting",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "test": "tsx scripts/smoke.ts 120 out"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ReinhardtBotha/silicone-mould-maker.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/ReinhardtBotha/silicone-mould-maker/issues"
+  },
+  "homepage": "https://github.com/ReinhardtBotha/silicone-mould-maker#readme",
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.1",
+    "@types/three": "^0.170.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.11"
+  },
+  "private": true,
+  "type": "module"
+}
