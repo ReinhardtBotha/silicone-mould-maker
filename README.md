@@ -56,6 +56,12 @@ npm test         # generates a mould for the demo teddy in Node and checks the m
 
 The build is static with relative paths, so `dist/` can be hosted anywhere (GitHub Pages, Netlify, etc.).
 
+### GitHub Pages
+
+`.github/workflows/deploy.yml` builds and deploys the site on every push to `main`. To turn it on, go to
+**Settings → Pages → Build and deployment → Source** and choose **GitHub Actions**. The site is published at
+`https://<user>.github.io/silicone-mould-maker/`.
+
 ## Casting workflow
 
 1. Print both halves and the base plate (PLA/PETG, 3+ perimeters).
